@@ -2,46 +2,60 @@
 // Project 4, site-tester.cpp
 // 24 March 2017
 
-// Goal: Periodically queuery a set of URLs
-// to see if a pre-specified list of keywords
-// (or links) appears on those sites
+#include <iostream>
+#include <stdio.h>
+#include <fstream>
+#include <string.h>
+#include <vector>
+#include <algorithm>
 
-/* 
-	argument: configuration file
-		configuration file: 1 parameter per line
-		PARAM = XXXXXX
-		unknown parameters should convey a warning, but may be ignored
-		parameters should have a defualt value 
-		if search_file or site_file cannot be found
-			program should convey error and not start up 
+using namespace std;
 
-		Parameter		Description													Default
-		PERIOD_FETCH	The time (in seconds) between fetches of the various sites	180
-		NUM_FETCH		Number of fetch threads										1
-		NUM_PARSE		Number of parsing threads									1
-		SEARCH_FILE		File containing the search strings							Search.txt
-		SITE_FILE		File containing the sites to query							Sites.txt
+void config();
+
+int main() {
+	config();
+	return 0;
+	
+}
 
 
-	search file: 
-		one string per line
-		any set of characters (spaces) but no carriage return or comma
-		a match occurs if there is an exact match (case sensitive)
+void config(){
 
-	site file: 
-		one site per line
-		line prefaced by http://
+	// Configuration Parameters - Default Values 
+	int PERIOD_FETCH = 180;				// time between fetches of sites
+	int NUM_FETCH = 1;					// number of fetch threads
+	int NUM_PARSE = 1;					// number of parsing threads
+	string SEARCH_FILE = "Search.txt";	// file containing the search strings
+	string SITE_FILE = "Sites.txt";		// file containing the sites to query 
 
-	output file: 
-		filenames: 1.csv, 2.csv 
-		Date and Time, Search Phrase, Site, Count 
-		should combine all these files into one bigger file 
-*/
+	string line, param, value, delimiter = "=";
+	int position;
 
-//Every N seconds (specified by the period)
-	// fetching threads should fetch the various site content
-	// You can use SIG_ALRM or something different
-// The fetch threads use libcurl to get content
-	// Data is copied and placed into a queue for the parse threads (word counters)
-// The parse threads then take that content and count all of the various search words
-// As each parse thread finishes a result, it should append the data into the appropriate output file
+	vector<string> parameters;
+	vector<string> values;
+
+	ifstream config_file;
+	config_file.open("Config.txt");
+	
+	if (config_file.is_open()){
+		while (getline (config_file, line)){
+			position = line.find(delimiter);
+			param = line.substr(0, line.find(delimiter));
+			value = line.substr(position + 1);
+			parameters.push_back(param);
+			values.push_back(value);
+		}
+		config_file.close();
+	}
+
+	vector<string>::iterator it;
+	it = find(parameters.begin(), parameters.end(), "SEARCH_FILE");
+	if (it == parameters.end()){
+		cout << "ERROR" << endl;
+	}
+}
+
+
+
+
