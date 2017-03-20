@@ -12,7 +12,7 @@
 
 using namespace std;
 
-class Config() {
+class Config {
 	public:
 		Config();
 		void read_config_file();
@@ -23,7 +23,7 @@ class Config() {
 		int NUM_PARSE;
 		string SEARCH_FILE;
 		string SITE_FILE;
-}
+};
 
 Config::Config() {
 	// Configuration Parameters - Default Values 
@@ -68,13 +68,13 @@ void Config::read_config_file() {
 		cout << "warning: unknown parameter passed" << endl;
 	}
 
-	for (auto it = config_parameters.begin; it != config_parameters.end(); it++) {
+	for (auto it = config_parameters.begin(); it != config_parameters.end(); it++) {
 		if (it->first == "PERIOD_FETCH") {
-			PERIOD_FETCH = it->second;
+			PERIOD_FETCH = stoi(it->second);
 		} else if (it->first == "NUM_FETCH") {
-			NUM_FETCH = it->second;
+			NUM_FETCH = stoi(it->second);
 		} else if (it->first == "NUM_PARSE") {
-			NUM_PARSE = it->second;
+			NUM_PARSE = stoi(it->second);
 		} else if (it->first == "SEARCH_FILE") {
 			SEARCH_FILE = it->second;
 		} else if (it->first == "SITE_FILE") {

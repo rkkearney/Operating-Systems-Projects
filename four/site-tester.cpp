@@ -9,13 +9,13 @@
 #include <vector>
 #include <algorithm>
 
-#include <config.cpp>
+#include "Config.cpp"
 
 using namespace std;
 
 
 int main() {
-	Config config_class();
+	Config config_class;
 	config_class.read_config_file();
 	config_class.print();
 
