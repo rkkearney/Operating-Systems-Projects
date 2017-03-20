@@ -20,7 +20,7 @@ int main() {
 }
 
 
-void config(){
+void config() {
 
 	// Configuration Parameters - Default Values 
 	int PERIOD_FETCH = 180;				// time between fetches of sites
