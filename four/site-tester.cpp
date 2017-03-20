@@ -15,11 +15,12 @@ using namespace std;
 
 
 int main() {
+	
 	Config config_class;
 	config_class.read_config_file();
 	config_class.print();
 
-
+	// Get search terms from file 
 	ifstream search_file;
 	search_file.open(config_class.SEARCH_FILE);
 	string line;
@@ -36,8 +37,24 @@ int main() {
 		cout << search_lines[i] << endl;
 	}
 
-	return 0;
+	// Get sites from file 
+	ifstream site_file;
+	site_file.open(config_class.SITE_FILE);
+	string siteName;
+	vector<string> sites;
 	
+	if (site_file.is_open()){
+		while (getline (site_file, siteName)) {
+			sites.push_back(siteName);
+		}
+		site_file.close();
+	}
+
+	for (auto i = 0; i < sites.size(); i++) {
+		cout << sites[i] << endl;
+	}
+
+	return 0;
 }
 
 
