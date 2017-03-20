@@ -17,7 +17,6 @@ class Config {
 		Config();
 		void read_config_file();
 		void print();
-	private:
 		int PERIOD_FETCH;
 		int NUM_FETCH;
 		int NUM_PARSE;
