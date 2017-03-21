@@ -1,7 +1,10 @@
+CC=g++
+CFLAGS=-Wall -std=c++11 -lcurl
+
 all: site-tester
 
 site-tester:
-	g++ -Wall -std=c++11 -lcurl site-tester.cpp -o site-tester
+	$(CC) $(CFLAGS) site-tester.cpp -o site-tester
 
 clean:
 	rm -f site-tester

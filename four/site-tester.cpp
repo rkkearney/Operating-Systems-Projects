@@ -19,6 +19,29 @@ vector<string> get_search_terms(string);
 vector<string> get_site_names(string);
 string get_timestamp();
 
+
+/* Psuedo-code notes from class 
+// global variables are OK 
+	// fetch queue and parse queue 
+// whatever you have in start-up (all files) won't change while program is running 
+// have a big loop running
+// 1) need to consume - see if there is work to do 
+
+void * threadFetch (void * pData)
+	while (1) or while (gKeepRunning) // globalKeepRunning should go until you bailout
+		lock fetch_queue mutex
+		while (fetch_queue.getCount() == 0) //no work to do 
+			pthread_cond_wait(mutex, cond_variable) //conditionally wait 
+		pop first item from queue (it's one of the sites)
+		unlock fetch_queue mutex 
+		CURL // each thread can't share the same handler 
+		lock parse_queue 
+		put data / work into parse_queue // probably a big C++ string 
+		signal or broadcast // signal wakes up one thread, bcast wakes up all 
+		// more general use bcast
+		unlock parse_queue
+*/
+
 int main() {
 	
 	Config config_class;
