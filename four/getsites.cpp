@@ -6,8 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <curl/curl.h>
-
 using namespace std;
+
+static size_t WriteMemoryCallback(void *, size_t, size_t, void *);
+string get_site_contents(string);
 
 struct MemoryStruct {
 	char *memory;
@@ -30,14 +32,15 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 	return realsize;
 }
 
-int main() {
+string get_site_contents(string site) {
 	CURL *curl_handle;
 	CURLcode res;
 
 	struct MemoryStruct chunk;
+	string site_content;
 
 	chunk.memory = (char *)malloc(1);  	// will be grown as needed by the realloc above
-	chunk.size = 0;    			// no data at this point
+	chunk.size = 0;    					// no data at this point
 
 	curl_global_init(CURL_GLOBAL_ALL);
 
@@ -45,7 +48,7 @@ int main() {
 	curl_handle = curl_easy_init();
 
 	// specify URL to get 
-	curl_easy_setopt(curl_handle, CURLOPT_URL, "http://www.cnn.com/");
+	curl_easy_setopt(curl_handle, CURLOPT_URL, site.c_str());
 
 	// send all data to this function 
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -63,30 +66,19 @@ int main() {
 	if (res != CURLE_OK) {
 		fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 	} else {
-		/*
-		 * Now, our chunk.memory points to a memory block that is chunk.size
-		 * bytes big and contains the remote file.
-		 *
-		 * Do something nice with it!
-		 */
-		string site;
-		//strcpy(site,)
-		memcpy(&site, &chunk.memory, chunk.size);
-		printf("%s: %lu bytes retrieved\n", site.c_str(), (long)chunk.size);
+		for (unsigned i = 0; i < chunk.size; i++) {
+			site_content.push_back(chunk.memory[i]);
+		}
 	}
 
-	cout << "exit else\n";
-	cout << "clean up\n";
 	// cleanup curl stuff
 	curl_easy_cleanup(curl_handle);
 
-	cout << "tryna free\n";
 	// free allocated memory 
 	free(chunk.memory);
 
 	// clean up libcurl 
-	cout << "clean up\n";
 	curl_global_cleanup();
 
-	return 0;
+	return site_content;
 }

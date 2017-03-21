@@ -8,11 +8,12 @@
 #include <string.h>
 #include <vector>
 #include <algorithm>
+#include <curl/curl.h>
 
 #include "Config.cpp"
+#include "getsites.cpp"
 
 using namespace std;
-
 
 int main() {
 	
@@ -33,7 +34,7 @@ int main() {
 		search_file.close();
 	}
 
-	for (auto i = 0; i < search_lines.size(); i++) {
+	for (unsigned i = 0; i < search_lines.size(); i++) {
 		cout << search_lines[i] << endl;
 	}
 
@@ -50,8 +51,29 @@ int main() {
 		site_file.close();
 	}
 
-	for (auto i = 0; i < sites.size(); i++) {
+	//vector<string> site_contents;
+
+	for (unsigned i = 0; i < sites.size(); i++) {
 		cout << sites[i] << endl;
+		
+		//cout << get_site_contents(sites[i]) << endl;
+		string temp = get_site_contents(sites[i]);
+		time_t rawtime;
+		struct tm * timeinfo;
+
+		time(&rawtime);
+		timeinfo = localtime(&rawtime);
+		string time_str = asctime(timeinfo);
+		time_str.erase(remove(time_str.begin(), time_str.end(), '\n'), time_str.end());
+		cout << time_str << ", ";
+			
+		int count = 0;	
+		size_t start = 0;
+		while ((start = temp.find("News", start)) != temp.npos) {
+			count++;
+			start += strlen("News"); // see the note
+		}
+		cout << "News" << ", " << sites[i] << ", " << count << endl;
 	}
 
 	return 0;

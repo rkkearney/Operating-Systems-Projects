@@ -1,10 +1,7 @@
-all: site-tester getsites
+all: site-tester
 
-site-tester: 
-	g++ -std=c++11 site-tester.cpp -o site-tester
-
-getsites:
-	g++ -std=c++11 -lcurl getsites.cpp -o getsites
+site-tester:
+	g++ -Wall -std=c++11 -lcurl site-tester.cpp -o site-tester
 
 clean:
-	rm -f site-tester getsites
+	rm -f site-tester
