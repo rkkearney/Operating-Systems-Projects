@@ -1,6 +1,6 @@
 Notre
 Cub Scouts
-CSE30341
+CSE 30341
 Operating
 Systems
 Striegel
