@@ -26,6 +26,12 @@ vector<string> SITES;
 int TIMER_COUNT;
 vector<string> SEARCH_LINES;
 
+// intialize fetch / parse locks and condition variables 
+	pthread_mutex_t fetch_lock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t parse_lock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_cond_t  fetch_cond = PTHREAD_COND_INITIALIZER;
+	pthread_cond_t parse_cond = PTHREAD_COND_INITIALIZER;
+
 // Structs
 typedef struct fetch_args {
 	pthread_mutex_t fetch_lock;
@@ -51,7 +57,6 @@ void get_site_names(string);
 string get_timestamp();
 void * thread_fetch(void *);
 void * thread_parse(void *);
-void * thread_timer (void *);
 void timer_handler(int s);
 void sighup_handler(int s);
 
@@ -69,20 +74,6 @@ int main() {
 
 	// Initialize Timer
 	TIMER_COUNT = config_class.PERIOD_FETCH;
-
-	// intialize fetch / parse locks and condition variables 
-	pthread_mutex_t fetch_lock = PTHREAD_MUTEX_INITIALIZER;
-	pthread_mutex_t parse_lock = PTHREAD_MUTEX_INITIALIZER;
-	pthread_cond_t  fetch_cond = PTHREAD_COND_INITIALIZER;
-	pthread_cond_t parse_cond = PTHREAD_COND_INITIALIZER;
-
-	// Initialize thread timer with appropriate arguments
-	pthread_t *timer_thread = (long unsigned int*) malloc(sizeof(pthread_t));
-	timer_args timer_thread_args;
-	timer_thread_args.fetch_lock = fetch_lock;
-	timer_thread_args.fetch_cond = fetch_cond;
-	timer_thread_args.period = 	config_class.PERIOD_FETCH;
-	pthread_create(timer_thread, NULL, thread_timer, &timer_thread_args);
 
 	cout << "Timer thread initialized" << endl;
 
@@ -113,7 +104,9 @@ int main() {
 	parse_thread_args.parse_lock = parse_lock;
 	parse_thread_args.parse_cond = parse_cond;
 
+
 	for (int i = 0; i < config_class.NUM_FETCH; i++) {
+		cout << "creating a fetch thread" << endl;
 		pthread_create(&fetch_threads[i], NULL, thread_fetch, &fetch_thread_args);
 	}
 
@@ -121,7 +114,17 @@ int main() {
 		pthread_create(&parse_threads[i], NULL, thread_parse, &parse_thread_args);
 	}
 
-	/* WHERE DO WE JOIN? */
+	cout << "before signal" << endl;
+
+	signal(SIGALRM, timer_handler);						// signal alarm to decrement counter
+	TIMER_COUNT = 1;
+	alarm(1);	
+	cout << "post alarm" << endl;						// count 1 second at a time
+
+	for (int i = 0; i < config_class.NUM_FETCH; i++) {
+		pthread_join(fetch_threads[i], NULL);
+	}
+	// modify so there's a graceful exit on control C 
 
 	// output_file.close();
 
@@ -169,91 +172,89 @@ string get_timestamp() {
 
 // Handler function for fetch threads
 void * thread_fetch(void * pData) {
-	fetch_args *args = (fetch_args *) pData;						// create fetch thread arguments
 	cout << "thread_fetch\n";
 	string site;
 
-	/* DO WE NEED ANOTHER WHILE LOOP HERE? */
+	while (1){
+		cout << "thread while loop " << endl;	
+		pthread_mutex_lock(&fetch_lock);							// lock fetch mutex
+		cout << "lock" << endl;
+		while (FETCH_QUEUE.empty()) {					
+			pthread_cond_wait(&fetch_cond, &fetch_lock);			// wait if there is no work for thread 
+		}	
+		cout << "post conditional wait" << endl;
+		site = FETCH_QUEUE.front();										// pop first item from queue for libcurl call
+		cout << site << endl;
+		FETCH_QUEUE.pop();	
 
-	
-	pthread_mutex_lock(&args->fetch_lock);							// lock fetch mutex
-	while (FETCH_QUEUE.empty()) {					
-		pthread_cond_wait(&args->fetch_cond, &args->fetch_lock);	// wait if there is no work for thread 
-	}	
-	site = FETCH_QUEUE.front();										// pop first item from queue for libcurl call
-	FETCH_QUEUE.pop();	
-	cout << site << endl;
-	pthread_mutex_unlock(&args->fetch_lock);						// unlock fetch mutex
-	
-	string temp = get_site_contents(site);							// perform libcurl on site
-	
-	pthread_mutex_lock(&args->parse_lock);							// lock parse mutex
-	PARSE_QUEUE.push(temp);											// put data into parse_queue for consumers 
-	pthread_cond_signal(&args->parse_cond);							// signal thread to wake up 		
-	pthread_mutex_unlock(&args->parse_lock);						// unlock parse mutex	
+		pthread_mutex_unlock(&fetch_lock);						// unlock fetch mutex
+		
+		cout << "unlocked fetch" << endl;
+		string temp = get_site_contents(site);							// perform libcurl on site
+		//cout << temp << endl;
+
+		pthread_mutex_lock(&parse_lock);							// lock parse mutex
+		PARSE_QUEUE.push(temp);											// put data into parse_queue for consumers 
+		pthread_cond_signal(&parse_cond);							// signal thread to wake up 		
+		pthread_mutex_unlock(&parse_lock);						// unlock parse mutex	
+
+	}
 
 	return 0;
 }
 
 // Handler function for parse threads
 void * thread_parse (void * pData) {
-	parse_args *args = (parse_args *) pData;						// create parse thread arguments
 	cout << "thread_parse:" << endl;
 
-	pthread_mutex_lock(&args->parse_lock);							// lock parse mutex
+	while (1){
+		pthread_mutex_lock(&parse_lock);							// lock parse mutex
 
-	while (PARSE_QUEUE.empty()) {									// wait if there is no work for thread
-		pthread_cond_wait(&args->parse_cond, &args->parse_lock);
-	}
-	cout << "PARSE_QUEUE.size()=" << PARSE_QUEUE.size() << endl;
-	
-	string time_str = get_timestamp();								// get timestamp from fetch
-	string site_content = PARSE_QUEUE.front();						// get string content from queue
-
-	for (unsigned i = 0; i < SEARCH_LINES.size(); i++) {			// iterate through all search terms in file
-		int count = 0;	
-		size_t start = 0;
-
-		while ((start = site_content.find(SEARCH_LINES[i], start)) != site_content.npos) {	// use substring notation to search for term
-			count++;																		// increment count for search term
-			start += SEARCH_LINES[i].length();												// increment start by lenght of string to continue
+		while (PARSE_QUEUE.empty()) {									// wait if there is no work for thread
+			pthread_cond_wait(&parse_cond, &parse_lock);
 		}
-
-		cout << time_str << "," << SEARCH_LINES[i] << "," << SITES.front() << "," << count << endl;	// output counts to cout right now 
-	}
-
-	PARSE_QUEUE.pop();									// remove content from queue once processed
-	pthread_mutex_unlock(&args->parse_lock);			// unlock mutex
-
-	return 0;
-}
-
-// Handler function for timer thread 
-void * thread_timer (void * pData) {
-	timer_args *args = (timer_args *) pData;			// create timer thread arguments
-	cout << "thread_timer\n";
-
-	signal(SIGALRM, timer_handler);						// signal alarm to decrement counter
-	alarm(1);											// count 1 second at a time
-	
-	if (!TIMER_COUNT) {									// when timer runs out
-		pthread_mutex_lock(&args->fetch_lock);			// lock fetch mutex
-		for (unsigned i = 0; i < SITES.size(); i++) {	// repopulate fetch queue for producers
-			FETCH_QUEUE.push(SITES[i]);
-		}
+		cout << "PARSE_QUEUE.size()=" << PARSE_QUEUE.size() << endl;
 		
-		pthread_cond_signal(&args->fetch_cond);			// signal producers fetch_queue contains sites	
-		pthread_mutex_unlock(&args->fetch_lock);		/* DOES THIS WAKE UP THE THREADS AND THEN UNLOCK? */
-		TIMER_COUNT = args->period;						// reset timer				
+		string time_str = get_timestamp();								// get timestamp from fetch
+		string site_content = PARSE_QUEUE.front();						// get string content from queue
+
+		for (unsigned i = 0; i < SEARCH_LINES.size(); i++) {			// iterate through all search terms in file
+			int count = 0;	
+			size_t start = 0;
+
+			while ((start = site_content.find(SEARCH_LINES[i], start)) != site_content.npos) {	// use substring notation to search for term
+				count++;																		// increment count for search term
+				start += SEARCH_LINES[i].length();												// increment start by lenght of string to continue
+			}
+
+			cout << time_str << "," << SEARCH_LINES[i] << "," << SITES.front() << "," << count << endl;	// output counts to cout right now 
+		}
+
+		PARSE_QUEUE.pop();									// remove content from queue once processed
+		pthread_mutex_unlock(&parse_lock);			// unlock mutex
 	}
 	return 0;
 }
 
 // Handler function for timer
 void timer_handler(int s) {
-	TIMER_COUNT--;										// decrement counter 
+	TIMER_COUNT--;	
+	cout << "Timer handler" << endl;
+	if (!TIMER_COUNT) {									// when timer runs out
+		pthread_mutex_lock(&fetch_lock);				// lock fetch mutex
+		cout << "SITES.size()=" << SITES.size() << endl;
+		for (unsigned i = 0; i < SITES.size(); i++) {	// repopulate fetch queue for producers
+			FETCH_QUEUE.push(SITES[i]);
+		}
+		cout << "FETCH_QUEUE.size()=" << FETCH_QUEUE.size() << endl;
+		
+		pthread_cond_broadcast(&fetch_cond);			// signal producers fetch_queue contains sites	
+		pthread_mutex_unlock(&fetch_lock);				/* DOES THIS WAKE UP THE THREADS AND THEN UNLOCK? */
+		TIMER_COUNT = 180;								// reset timer				
+	}
+										// decrement counter 
+	// re-arm timer to go off 1 second later
 	alarm(1);											// one second at a time
-	signal(SIGALRM, timer_handler);
 }
 
 // Hanlder function for sighup signal catching
@@ -263,5 +264,6 @@ void sighup_handler(int s) {
 	exit(s);											// terminate program
 }
 
-
-
+// control handler 
+// broadcast to waiting signals
+// condition has changed 
