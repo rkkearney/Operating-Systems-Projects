@@ -1,7 +1,7 @@
 
 Project 4: System for Verifying Web Placement 
 Authors: 
-	Maddie Gleason (mgleaso4)
+	Maddie Gleason (mgleaso4)  ** submitted to dropbox
 	Reilly Kearney (rkearne1)
 
 Description: 
