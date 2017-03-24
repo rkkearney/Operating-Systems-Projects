@@ -169,15 +169,24 @@ void * thread_parse (void * pData) {
 		
 		string time_str = get_timestamp();								// get timestamp from fetch
 		string site_content = PARSE_QUEUE.front();						// get string content from queue
+		//cout << site_content << endl;
 
 		for (unsigned i = 0; i < SEARCH_LINES.size(); i++) {			// iterate through all search terms in file
 			int count = 0;	
 			size_t start = 0;
+			
+			unsigned position = 0;
+			unsigned end = 0;
 
-			while ((start = site_content.find(SEARCH_LINES[i], start)) != site_content.npos) {	// use substring notation to search for term
-				count++;																		// increment count for search term
-				start += SEARCH_LINES[i].length();												// increment start by lenght of string to continue
+			// set position and end to only search HTML body 
+			position = site_content.find("<body", 0);					// start HTML body 
+			end = site_content.find("</body>");							// end HTML body											
+			
+			while ((position = site_content.find(SEARCH_LINES[i], position)) < end) {	// use substring notation to search for term		
+				count++;	
+				position = position + SEARCH_LINES[i].size();	
 			}
+
 			pthread_mutex_lock(&output_lock);																			// lock output file mutex
 			OUTPUT_FILE << time_str << "," << SEARCH_LINES[i] << "," << SITE_NAMES.front() << "," << count << endl;		// print output to file
 			pthread_mutex_unlock(&output_lock);																			// unlock output file mutex
