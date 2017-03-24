@@ -2,6 +2,10 @@
 // Project 4, site-tester.cpp
 // 24 March 2017
 
+// NOTE: This code was almost completely 
+// taken from the example found here: 
+// https://curl.haxx.se/libcurl/c/getinmemory.html
+
 #include <iostream>
 #include <stdlib.h>
 #include <string.h>

@@ -16,7 +16,6 @@ class Config {
 	public:
 		Config();
 		int read_config_file(string);
-		void print();
 		int PERIOD_FETCH;
 		int NUM_FETCH;
 		int NUM_PARSE;
@@ -38,25 +37,26 @@ int Config::read_config_file(string fileName) {
 	string line, param, value, delimiter = "=";
 	int position;
 
-	map<string,string> config_parameters;
+	map<string,string> config_parameters;		// map paramters to value
 
 	ifstream config_file;
 	config_file.open(fileName);
 
-	if (config_file.is_open()){
-		while (getline (config_file, line)){
-			position = line.find(delimiter);
-			param = line.substr(0, line.find(delimiter));
-			value = line.substr(position + 1);
-			config_parameters.emplace(param, value);
-		}
-		config_file.close();
+	if (config_file.is_open()){								// open specified configuration file
+		while (getline (config_file, line)){				// search through each lines
+			position = line.find(delimiter);				// delimit based on =
+			param = line.substr(0, line.find(delimiter));	// create parameter
+			value = line.substr(position + 1);				// and value
+			config_parameters.emplace(param, value);		// add to map
+		}		
+		config_file.close();								// close file
 	} else {
-		cout << "File not found." << endl;
+		cout << "File not found." << endl;					// print error message if problem with file
 		return 1;
 	}
 
-	auto it = config_parameters.find("SEARCH_FILE");
+	// check for necessary parameters - SEARCH_FILE and SITE_FILE
+	auto it = config_parameters.find("SEARCH_FILE");	
 	auto iter = config_parameters.find("SITE_FILE");
 	
 	if (it == config_parameters.end() && iter == config_parameters.end()) {
@@ -76,6 +76,7 @@ int Config::read_config_file(string fileName) {
 		cout << "warning: unknown parameter passed" << endl;
 	}
 
+	// ESTABLISH ALL PARAMTERS GIVEN MAP KEYS / VALUES
 	for (auto it = config_parameters.begin(); it != config_parameters.end(); it++) {
 		if (it->first == "PERIOD_FETCH") {
 			PERIOD_FETCH = stoi(it->second);
@@ -90,12 +91,4 @@ int Config::read_config_file(string fileName) {
 		}
 	}
 	return 0;
-}
-
-void Config::print() {
-	cout << "PERIOD_FETCH=" << PERIOD_FETCH << endl;
-	cout << "NUM_FETCH=" << NUM_FETCH << endl; 
-	cout << "NUM_PARSE=" << NUM_PARSE << endl; 
-	cout << "SEARCH_FILE=" << SEARCH_FILE << endl; 
-	cout << "SITE_FILE=" << SITE_FILE << endl; 
 }
