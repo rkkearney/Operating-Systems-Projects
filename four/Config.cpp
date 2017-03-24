@@ -15,7 +15,7 @@ using namespace std;
 class Config {
 	public:
 		Config();
-		int read_config_file();
+		int read_config_file(string);
 		void print();
 		int PERIOD_FETCH;
 		int NUM_FETCH;
@@ -25,6 +25,7 @@ class Config {
 };
 
 Config::Config() {
+
 	// Configuration Parameters - Default Values 
 	PERIOD_FETCH = 180;				// time between fetches of sites
 	NUM_FETCH = 1;					// number of fetch threads
@@ -33,15 +34,15 @@ Config::Config() {
 	SITE_FILE = "Sites.txt";		// file containing the sites to query
 }
 
-int Config::read_config_file() { 
+int Config::read_config_file(string fileName) { 
 	string line, param, value, delimiter = "=";
 	int position;
 
 	map<string,string> config_parameters;
 
 	ifstream config_file;
-	config_file.open("Config.txt");
-	
+	config_file.open(fileName);
+
 	if (config_file.is_open()){
 		while (getline (config_file, line)){
 			position = line.find(delimiter);
@@ -50,6 +51,9 @@ int Config::read_config_file() {
 			config_parameters.emplace(param, value);
 		}
 		config_file.close();
+	} else {
+		cout << "File not found." << endl;
+		return 1;
 	}
 
 	auto it = config_parameters.find("SEARCH_FILE");
@@ -63,7 +67,6 @@ int Config::read_config_file() {
 		cout << "error: SEARCH_FILE not specified" << endl;
 		return 1;
 	}
-	
 	if (iter == config_parameters.end()) {
 		cout << "error: SITE_FILE not specified" << endl;
 		return 1;

@@ -45,15 +45,23 @@ void * thread_parse(void *);
 void timer_handler(int s);
 void sigint_handler(int s);
 
-int main() {
+int main(int argc, char* argv[]) {
+	string file;
+	
+	if (argc != 2){
+		cout << "usage: ./site-tester <configuration_file>" << endl;
+		exit(1);
+	}	
+	file = argv[1];
 	
 	// Initialize signal hangup given ^C in terminal 
 	signal(SIGINT, sigint_handler);
 
 	while (1) {
+		
 		// Read and set up parameters from configuration file 
 		Config config_class;	
-		int bad = config_class.read_config_file();
+		int bad = config_class.read_config_file(file);
 		if (bad){
 			exit(1);
 		}
@@ -173,8 +181,6 @@ void * thread_parse (void * pData) {
 
 		for (unsigned i = 0; i < SEARCH_LINES.size(); i++) {			// iterate through all search terms in file
 			int count = 0;	
-			size_t start = 0;
-			
 			unsigned position = 0;
 			unsigned end = 0;
 

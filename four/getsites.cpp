@@ -65,6 +65,7 @@ string get_site_contents(string site) {
 	// check for errors
 	if (res != CURLE_OK) {
 		fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+		exit(1);
 	} else {
 		for (unsigned i = 0; i < chunk.size; i++) {
 			site_content.push_back(chunk.memory[i]);

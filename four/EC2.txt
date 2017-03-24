@@ -1,0 +1,8 @@
+Project 4: System for Verifying Web Placement 
+Authors: 
+	Maddie Gleason (mgleaso4)
+	Reilly Kearney (rkearne1)
+
+Description: 
+
+We pursued Extra Credit 2 for this project, as seen in the thread_parse() function with the site-tester.cpp file. When searching for terms specified by the search file, we limit the site content to the body using position/end variables and str.find(). We find instances of <body> and </body> within the site content and only search for terms within this data. 
