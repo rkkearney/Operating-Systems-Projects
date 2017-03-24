@@ -15,7 +15,7 @@ using namespace std;
 class Config {
 	public:
 		Config();
-		void read_config_file();
+		int read_config_file();
 		void print();
 		int PERIOD_FETCH;
 		int NUM_FETCH;
@@ -33,7 +33,7 @@ Config::Config() {
 	SITE_FILE = "Sites.txt";		// file containing the sites to query
 }
 
-void Config::read_config_file() { 
+int Config::read_config_file() { 
 	string line, param, value, delimiter = "=";
 	int position;
 
@@ -53,14 +53,20 @@ void Config::read_config_file() {
 	}
 
 	auto it = config_parameters.find("SEARCH_FILE");
+	auto iter = config_parameters.find("SITE_FILE");
+	
+	if (it == config_parameters.end() && iter == config_parameters.end()) {
+		cout << "error: SEARCH_FILE and SITE_FILE not specified" << endl;
+		return 1;
+	}
 	if (it == config_parameters.end()) {
 		cout << "error: SEARCH_FILE not specified" << endl;
-		// exit
+		return 1;
 	}
-	it = config_parameters.find("SITE_FILE");
-	if (it == config_parameters.end()) {
+	
+	if (iter == config_parameters.end()) {
 		cout << "error: SITE_FILE not specified" << endl;
-		// exit
+		return 1;
 	}
 
 	if (config_parameters.size() > 5) {
@@ -80,6 +86,7 @@ void Config::read_config_file() {
 			SITE_FILE = it->second;
 		}
 	}
+	return 0;
 }
 
 void Config::print() {

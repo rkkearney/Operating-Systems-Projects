@@ -22,34 +22,19 @@ using namespace std;
 // Global Variables
 queue<string> FETCH_QUEUE;
 queue<string> PARSE_QUEUE;
+queue<string> SITE_NAMES;
 vector<string> SITES;
-int TIMER_COUNT;
+int TIMER_COUNT, PERIOD;
 vector<string> SEARCH_LINES;
+int KEEPLOOPING = 1;
+ofstream OUTPUT_FILE;
 
-// intialize fetch / parse locks and condition variables 
-	pthread_mutex_t fetch_lock = PTHREAD_MUTEX_INITIALIZER;
-	pthread_mutex_t parse_lock = PTHREAD_MUTEX_INITIALIZER;
-	pthread_cond_t  fetch_cond = PTHREAD_COND_INITIALIZER;
-	pthread_cond_t parse_cond = PTHREAD_COND_INITIALIZER;
-
-// Structs
-typedef struct fetch_args {
-	pthread_mutex_t fetch_lock;
-	pthread_cond_t fetch_cond;
-	pthread_mutex_t parse_lock;
-	pthread_cond_t parse_cond;
-} fetch_args;
-
-typedef struct parse_args {
-	pthread_mutex_t parse_lock;
-	pthread_cond_t parse_cond;
-} parse_args;
-
-typedef struct timer_args {
-	pthread_mutex_t fetch_lock;
-	pthread_cond_t fetch_cond;
-	int period;
-} timer_args;
+// Global fetch / parse locks and condition variables 
+pthread_mutex_t fetch_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t parse_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t output_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  fetch_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t parse_cond = PTHREAD_COND_INITIALIZER;
 
 // Function prototypes
 void get_search_terms(string);
@@ -58,76 +43,54 @@ string get_timestamp();
 void * thread_fetch(void *);
 void * thread_parse(void *);
 void timer_handler(int s);
-void sighup_handler(int s);
+void sigint_handler(int s);
 
 int main() {
 	
 	// Initialize signal hangup given ^C in terminal 
-	signal(SIGHUP, sighup_handler);
+	signal(SIGINT, sigint_handler);
 
-	// Read and set up parameters from configuration file 
-	Config config_class;	
-	config_class.read_config_file();
+	while (1) {
+		// Read and set up parameters from configuration file 
+		Config config_class;	
+		int bad = config_class.read_config_file();
+		if (bad){
+			exit(1);
+		}
 
-	// Get search terms from file 
-	get_search_terms(config_class.SEARCH_FILE);
+		// Get search terms from file 
+		get_search_terms(config_class.SEARCH_FILE);
 
-	// Initialize Timer
-	TIMER_COUNT = config_class.PERIOD_FETCH;
+		// Get sites from SITE_FILE for first fetch
+		get_site_names(config_class.SITE_FILE);
+		PERIOD = config_class.PERIOD_FETCH;
+		
+		// Initialize correct number of threads given NUM_FETCH and NUM_PARSE
+		pthread_t *fetch_threads = (long unsigned int*) malloc(config_class.NUM_FETCH * sizeof(pthread_t));
+		pthread_t *parse_threads = (long unsigned int*) malloc(config_class.NUM_PARSE * sizeof(pthread_t));
 
-	cout << "Timer thread initialized" << endl;
+		// Create fetch and parse threads
+		for (int i = 0; i < config_class.NUM_FETCH; i++) {
+			pthread_create(&fetch_threads[i], NULL, thread_fetch, NULL);
+		}
 
-	// Get sites from SITE_FILE for first fetch
-	get_site_names(config_class.SITE_FILE);
-	for (unsigned i = 0; i < SITES.size(); i++) {
-		FETCH_QUEUE.push(SITES[i]);
+		for (int i = 0; i < config_class.NUM_PARSE; i++) {
+			pthread_create(&parse_threads[i], NULL, thread_parse, NULL);
+		}
+
+		// singal to timer
+		signal(SIGALRM, timer_handler);						
+		TIMER_COUNT = 0;
+		alarm(1);	
+
+		// join fetch and parse threads 
+		for (int i = 0; i < config_class.NUM_FETCH; i++) {
+			pthread_join(fetch_threads[i], NULL);
+		}
+		for (int i = 0; i < config_class.NUM_PARSE; i++) {
+			pthread_join(parse_threads[i], NULL);
+		}
 	}
-
-	cout << "FETCH_QUEUE.size()=" << FETCH_QUEUE.size() << endl;
-
-	/* Handle Output File */
-	// Create output file 
-	// ofstream output_file;
-	// output_file.open ("output.csv");
-
-	// Initialize correct number of threads given NUM_FETCH and NUM_PARSE
-	pthread_t *fetch_threads = (long unsigned int*) malloc(config_class.NUM_FETCH * sizeof(pthread_t));
-	pthread_t *parse_threads = (long unsigned int*) malloc(config_class.NUM_PARSE * sizeof(pthread_t));
-
-	fetch_args fetch_thread_args;
-	parse_args parse_thread_args;
-
-	fetch_thread_args.fetch_lock = fetch_lock;
-	fetch_thread_args.parse_lock = parse_lock;
-	fetch_thread_args.fetch_cond = fetch_cond;
-	fetch_thread_args.parse_cond = parse_cond;
-	parse_thread_args.parse_lock = parse_lock;
-	parse_thread_args.parse_cond = parse_cond;
-
-
-	for (int i = 0; i < config_class.NUM_FETCH; i++) {
-		cout << "creating a fetch thread" << endl;
-		pthread_create(&fetch_threads[i], NULL, thread_fetch, &fetch_thread_args);
-	}
-
-	for (int i = 0; i < config_class.NUM_PARSE; i++) {
-		pthread_create(&parse_threads[i], NULL, thread_parse, &parse_thread_args);
-	}
-
-	cout << "before signal" << endl;
-
-	signal(SIGALRM, timer_handler);						// signal alarm to decrement counter
-	TIMER_COUNT = 1;
-	alarm(1);	
-	cout << "post alarm" << endl;						// count 1 second at a time
-
-	for (int i = 0; i < config_class.NUM_FETCH; i++) {
-		pthread_join(fetch_threads[i], NULL);
-	}
-	// modify so there's a graceful exit on control C 
-
-	// output_file.close();
-
 	return 0;
 }
 
@@ -172,48 +135,37 @@ string get_timestamp() {
 
 // Handler function for fetch threads
 void * thread_fetch(void * pData) {
-	cout << "thread_fetch\n";
 	string site;
 
 	while (1){
-		cout << "thread while loop " << endl;	
 		pthread_mutex_lock(&fetch_lock);							// lock fetch mutex
-		cout << "lock" << endl;
-		while (FETCH_QUEUE.empty()) {					
+		while (FETCH_QUEUE.empty() && KEEPLOOPING) {					
 			pthread_cond_wait(&fetch_cond, &fetch_lock);			// wait if there is no work for thread 
 		}	
-		cout << "post conditional wait" << endl;
-		site = FETCH_QUEUE.front();										// pop first item from queue for libcurl call
-		cout << site << endl;
+		site = FETCH_QUEUE.front();									// pop first item from queue for libcurl call
+		SITE_NAMES.push(site);
 		FETCH_QUEUE.pop();	
 
-		pthread_mutex_unlock(&fetch_lock);						// unlock fetch mutex
+		pthread_mutex_unlock(&fetch_lock);							// unlock fetch mutex
 		
-		cout << "unlocked fetch" << endl;
-		string temp = get_site_contents(site);							// perform libcurl on site
-		//cout << temp << endl;
+		string temp = get_site_contents(site);						// perform libcurl on site
 
 		pthread_mutex_lock(&parse_lock);							// lock parse mutex
-		PARSE_QUEUE.push(temp);											// put data into parse_queue for consumers 
+		PARSE_QUEUE.push(temp);										// put data into parse_queue for consumers 
 		pthread_cond_signal(&parse_cond);							// signal thread to wake up 		
-		pthread_mutex_unlock(&parse_lock);						// unlock parse mutex	
-
+		pthread_mutex_unlock(&parse_lock);							// unlock parse mutex	
 	}
-
 	return 0;
 }
 
 // Handler function for parse threads
 void * thread_parse (void * pData) {
-	cout << "thread_parse:" << endl;
-
 	while (1){
-		pthread_mutex_lock(&parse_lock);							// lock parse mutex
+		pthread_mutex_lock(&parse_lock);								// lock parse mutex
 
-		while (PARSE_QUEUE.empty()) {									// wait if there is no work for thread
+		while (PARSE_QUEUE.empty() && KEEPLOOPING) {					// wait if there is no work for thread
 			pthread_cond_wait(&parse_cond, &parse_lock);
 		}
-		cout << "PARSE_QUEUE.size()=" << PARSE_QUEUE.size() << endl;
 		
 		string time_str = get_timestamp();								// get timestamp from fetch
 		string site_content = PARSE_QUEUE.front();						// get string content from queue
@@ -226,44 +178,48 @@ void * thread_parse (void * pData) {
 				count++;																		// increment count for search term
 				start += SEARCH_LINES[i].length();												// increment start by lenght of string to continue
 			}
-
-			cout << time_str << "," << SEARCH_LINES[i] << "," << SITES.front() << "," << count << endl;	// output counts to cout right now 
+			pthread_mutex_lock(&output_lock);																			// lock output file mutex
+			OUTPUT_FILE << time_str << "," << SEARCH_LINES[i] << "," << SITE_NAMES.front() << "," << count << endl;		// print output to file
+			pthread_mutex_unlock(&output_lock);																			// unlock output file mutex
 		}
 
-		PARSE_QUEUE.pop();									// remove content from queue once processed
-		pthread_mutex_unlock(&parse_lock);			// unlock mutex
+		PARSE_QUEUE.pop();								// remove content from queue once processed	
+		SITE_NAMES.pop();								// remove site name from name queue 
+		pthread_mutex_unlock(&parse_lock);				// unlock mutex
 	}
 	return 0;
 }
 
 // Handler function for timer
 void timer_handler(int s) {
-	TIMER_COUNT--;	
-	cout << "Timer handler" << endl;
-	if (!TIMER_COUNT) {									// when timer runs out
+	if (!TIMER_COUNT) {	
+		pthread_mutex_lock(&output_lock);				// lock output file mutex
+		OUTPUT_FILE.open ("output.csv");				// Create output file 
+		pthread_mutex_unlock(&output_lock);				// unlock output file mutex 
+		
 		pthread_mutex_lock(&fetch_lock);				// lock fetch mutex
-		cout << "SITES.size()=" << SITES.size() << endl;
 		for (unsigned i = 0; i < SITES.size(); i++) {	// repopulate fetch queue for producers
 			FETCH_QUEUE.push(SITES[i]);
-		}
-		cout << "FETCH_QUEUE.size()=" << FETCH_QUEUE.size() << endl;
-		
+		}		
 		pthread_cond_broadcast(&fetch_cond);			// signal producers fetch_queue contains sites	
 		pthread_mutex_unlock(&fetch_lock);				/* DOES THIS WAKE UP THE THREADS AND THEN UNLOCK? */
-		TIMER_COUNT = 180;								// reset timer				
+		TIMER_COUNT = PERIOD;							// reset timer	
 	}
-										// decrement counter 
-	// re-arm timer to go off 1 second later
-	alarm(1);											// one second at a time
+
+	TIMER_COUNT--;										// decrement timer count
+	cout << "timer: " << TIMER_COUNT << endl;
+	alarm(1);											// re-arm timer to go off 1 second later
 }
 
 // Hanlder function for sighup signal catching
-void sighup_handler(int s) {
-	cout << "Caught " << s << " Signal" << endl;		// catch sighup signal
-	cout << "Program terminated" << endl;				
-	exit(s);											// terminate program
-}
+void sigint_handler(int s) {
 
-// control handler 
-// broadcast to waiting signals
-// condition has changed 
+	KEEPLOOPING = 0;
+	
+	pthread_mutex_lock(&output_lock);				// lock output file mutex
+	OUTPUT_FILE.close();							// close output file
+	pthread_mutex_unlock(&output_lock);				// unlock output file mutex
+	
+	cout << endl << "Program terminated" << endl;				
+	exit(s);										// terminate program
+}
