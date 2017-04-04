@@ -13,6 +13,5 @@ disk.o: disk.c
 program.o: program.c
 	gcc -Wall -g -c program.c -o program.o
 
-
 clean:
 	rm -f *.o virtmem
