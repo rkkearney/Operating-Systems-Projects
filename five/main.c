@@ -23,8 +23,6 @@ int DISK_READS;
 int DISK_WRITES;
 int NPAGES;
 int NFRAMES;
-int PAGE_SIZE;
-int FRAME_SIZE;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
@@ -37,7 +35,7 @@ void page_fault_handler( struct page_table *pt, int page )
 		// then need to check if a frame is free
 		
 		srand(time(NULL));
-		int frame = rand(NFRAMES);
+		int frame = rand() % NFRAMES;
 		page_table_set_entry(pt, page, frame, PROT_READ);
 		disk_read(disk, page, &physmem[frame*frame_size]);
 
