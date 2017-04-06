@@ -26,8 +26,16 @@ int NFRAMES;
 
 void page_fault_handler( struct page_table *pt, int page )
 {
-	page_table_set_entry(pt, page, page, PROT_READ|PROT_WRITE);
+	//page_table_set_entry(pt, page, page, PROT_READ|PROT_WRITE);
 	
+	int * frame_num;
+	int * bits;
+	char * physmem_frame_table;
+	
+	physmem_frame_table = page_table_get_virtmem( pt );	
+	page_table_get_entry( pt, page, frame_num, bits );
+	
+
 	if(!strcmp(ALGORITHM,"rand")) {
 		
 		// have to start by reading a page --> gives a page fault
@@ -35,7 +43,7 @@ void page_fault_handler( struct page_table *pt, int page )
 		// then need to check if a frame is free
 		
 		srand(time(NULL));
-		int frame = rand() % NFRAMES;
+		int frame = rand() % (NFRAMES-1);
 		page_table_set_entry(pt, page, frame, PROT_READ);
 		disk_read(disk, page, &physmem[frame*frame_size]);
 
