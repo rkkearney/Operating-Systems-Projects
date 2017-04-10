@@ -144,7 +144,6 @@ string get_timestamp() {
 // Handler function for fetch threads
 void * thread_fetch(void * pData) {
 	string site;
-
 	while (1){
 		pthread_mutex_lock(&fetch_lock);							// lock fetch mutex
 		while (FETCH_QUEUE.empty() && KEEPLOOPING) {					
