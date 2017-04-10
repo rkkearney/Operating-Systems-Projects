@@ -22,11 +22,19 @@ int NFRAMES;
 const char *ALGORITHM;
 const char *PROGRAM;
 int *FRAME_TABLE;
+int FRAME_TABLE_ENTRIES = 0;
+struct disk *DISK;
+int PAGE_FAULTS=0;
+int DISK_READ=0;
+int DISK_WRITE=0;
+
+//time_t t;
 
 void rand_algorithm(int * frame){
 	// randomly choose a frame number to evict 
-	srand(time(NULL));
+	//srand((unsigned)time(&t));
 	*frame = rand() % (NFRAMES);
+	//printf("%d\t", rand());
 }
 
 void fifo_algorithm(){
@@ -46,44 +54,60 @@ void initialize_frame_table() {
 }
 
 // we could pass in the correct function to call and the frame number to evict 
-void page_fault_handler( struct page_table *pt, int page, char *physmem)
+void page_fault_handler( struct page_table *pt, int page)
 {
+	//printf("page=%d\n", page);
 	
 	int frame;
 	int bits;
-	//char *physmem = page_table_get_physmem(pt);
+	char *physmem = page_table_get_physmem(pt);
+	PAGE_FAULTS += 1;
+	//printf("Page Fault\n");
 
 	// start by reading a page from virtual memory 
 	page_table_get_entry(pt, page, &frame, &bits);
-		
-	int i;
-	for (i = 0; i < NFRAMES; i++) {
-		if (FRAME_TABLE[i] < 0) {
-			page_table_set_entry(pt, page, i, PROT_READ);
-			FRAME_TABLE[i] = page;
-			return;
+	
+	if (FRAME_TABLE_ENTRIES < NFRAMES && FRAME_TABLE[frame] != page) {
+		int i;
+		for (i = 0; i < NFRAMES; i++) {
+			if (FRAME_TABLE[i] == -1) {
+				page_table_set_entry(pt, page, i, PROT_READ);
+				FRAME_TABLE[i] = page;
+				FRAME_TABLE_ENTRIES += 1;
+				//printf("FRAME_TABLE[%d] = %d\n", i, page);
+				return;
+			}
 		}
 	}
+	
 	
 	page_table_get_entry(pt, page, &frame, &bits);
-	if (FRAME_TABLE[frame] == page && bits == PROT_READ && bits == PROT_READ|PROT_WRITE){
-		page_table_set_entry(pt, page, frame, PROT_READ|PROT_WRITE);
-	} else {
+	if (bits != PROT_READ) {
 		// not just rand but dependent on ALGORITHM 
 		rand_algorithm(&frame);
+		//printf("frame=%d\n", frame);
 		int evict_bits;
 		int evict_frame;
-		int evict_page = FRAME_TABLE[frame];
+		int evict_page = FRAME_TABLE[evict_frame];
 		page_table_get_entry(pt, evict_page, &evict_frame, &evict_bits);
-		if (evict_bits == PROT_WRITE) {
-			disk_write(disk, evict_page, &physmem[evict_frame*PAGE_SIZE]);
+		//printf("evict_page=%d\tevict_frame=%d\tevict_bits=%d \t", evict_page, evict_frame, evict_bits);
+		if (evict_bits == 3) {
+			disk_write(DISK, evict_page, &physmem[evict_frame*PAGE_SIZE]);
+			//printf("write occured");
+			DISK_WRITE += 1;
 		}
-		disk_read(disk, page, &physmem[frame*PAGE_SIZE]);
+		disk_read(DISK, page, &physmem[frame*PAGE_SIZE]);
+		DISK_READ += 1;
 		page_table_set_entry(pt, page, frame, PROT_READ);
-		page_table_set_entry(pt, evict_page, 0, 0);
+		page_table_set_entry(pt, evict_page, frame, 0);
 		FRAME_TABLE[frame] = page;
-	}
-	
+		//printf("\n");
+	} else if (FRAME_TABLE[frame] == page){
+		page_table_set_entry(pt, page, frame, PROT_READ|PROT_WRITE);
+		//printf("set to read|write\n");
+	} 
+	//printf("Page Faults:\t%d\nDisk Reads:\t%d\nDisk Writes:\t%d\n", PAGE_FAULTS, DISK_READ, DISK_WRITE);
+
 	// this read results in a page fault - look at existing permissions
 	// conclude fault occurs due to mising permisions 
 	// no permissions? add PROT_READ
@@ -100,15 +124,18 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 
+	//printf("PROT_READ: %d\tPROT_WRITE: %d\tPROT_READ|PROT_WRITE: %d\t\n", PROT_READ, PROT_WRITE, (PROT_READ|PROT_WRITE));
+
 	NPAGES = atoi(argv[1]);
 	NFRAMES = atoi(argv[2]);
+	//printf("NPAGES=%d\tNFRAMES=%d\n", NPAGES, NFRAMES);
 	ALGORITHM = argv[3];
 	PROGRAM = argv[4];
 
 	initialize_frame_table();
 
-	struct disk *disk = disk_open("myvirtualdisk", NPAGES);
-	if(!disk) {
+	DISK = disk_open("myvirtualdisk", NPAGES);
+	if(!DISK) {
 		fprintf(stderr,"couldn't create virtual disk: %s\n", strerror(errno));
 		return 1;
 	}
@@ -120,7 +147,7 @@ int main( int argc, char *argv[] )
 	}
 
 	char *virtmem = page_table_get_virtmem(pt);
-	char *physmem = page_table_get_physmem(pt);
+	//char *physmem = page_table_get_physmem(pt);
 
 	if(!strcmp(PROGRAM,"sort")) {
 		sort_program(virtmem, NPAGES*PAGE_SIZE);
@@ -136,8 +163,10 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 
+	printf("Page Faults:\t%d\nDisk Reads:\t%d\nDisk Writes:\t%d\n", PAGE_FAULTS, DISK_READ, DISK_WRITE);
+
 	page_table_delete(pt);
-	disk_close(disk);
+	disk_close(DISK);
 
 	return 0;
 }
