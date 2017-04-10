@@ -133,7 +133,7 @@ void page_fault_handler( struct page_table *pt, int page)
 		}
 		disk_read(DISK, page, &physmem[frame*PAGE_SIZE]);
 		DISK_READ += 1;
-		page_table_set_entry(pt, page, frame, PROT_READ);
+		page_table_set_entry(pt, page, frame, PROT_READ) ;
 		page_table_set_entry(pt, evict_page, frame, 0);
 		FRAME_TABLE[frame] = page;
 		TOTAL_ENTRIES += 1;
