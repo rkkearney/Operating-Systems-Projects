@@ -14,61 +14,58 @@ how to use the page table and disk interfaces.
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <time.h>
 
-// Global Variables
-const char *ALGORITHM;
-int PAGE_FAULTS;
-int DISK_READS;
-int DISK_WRITES;
+// Global Variables 
 int NPAGES;
 int NFRAMES;
+const char *ALGORITHM;
+const char *PROGRAM;
+
 
 void page_fault_handler( struct page_table *pt, int page )
 {
-	//page_table_set_entry(pt, page, page, PROT_READ|PROT_WRITE);
-	
-	int * frame_num;
-	int * bits;
-	char * physmem_frame_table;
-	
-	physmem_frame_table = page_table_get_virtmem( pt );	
-	page_table_get_entry( pt, page, frame_num, bits );
-	
+	//printf("page fault on page #%d\n",page);
+	//exit(1);
 
-	if(!strcmp(ALGORITHM,"rand")) {
-		
-		// have to start by reading a page --> gives a page fault
-		// depending on the page fault we know what to do 
-		// then need to check if a frame is free
-		
-		srand(time(NULL));
-		int frame = rand() % (NFRAMES-1);
-		page_table_set_entry(pt, page, frame, PROT_READ);
-		disk_read(disk, page, &physmem[frame*frame_size]);
+	int frame, bits;
+	char *physmem = page_table_get_physmem (pt);
 
-	} 
-	/*else if(!strcmp(ALGORITHM,"fifo")) {
-		
-	} else if(!strcmp(ALGORITHM,"custom")) {
-		
-	} else {
-		fprintf(stderr,"unknown algorithm: %s\n",argv[3]);
-		return 1;
-	}*/
+	// frame array where index is frame and page is value 
+
+	// start by reading a page from virtual memory 
+	// this read results in a page fault - look at existing permissions
+	// conclude fault occurs due to mising permisions 
+	// no permissions? add PROT_READ
+	// PROT READ? Add PROT_WRITE 
+	// page fault handler should choose a free frame
+	// adjust page table to map page to frame with correct permissions
+	// load correct page from disk into correct frame on physical memory 
+
+}
+
+void rand_algorithm(){
+
+}
+
+void fifo_algorithm(){
+
+}
+
+void custom_algorithm(){
+
 }
 
 int main( int argc, char *argv[] )
 {
 	if(argc!=5) {
-		printf("use: virtmem <npages> <nframes> <rand|fifo|lru|custom> <sort|scan|focus>\n");
+		printf("use: virtmem <NPAGES> <NFRAMES> <rand|fifo|lru|custom> <sort|scan|focus>\n");
 		return 1;
 	}
 
 	NPAGES = atoi(argv[1]);
 	NFRAMES = atoi(argv[2]);
 	ALGORITHM = argv[3];
-	const char *program = argv[4];
+	PROGRAM = argv[4];
 
 	struct disk *disk = disk_open("myvirtualdisk", NPAGES);
 	if(!disk) {
@@ -86,17 +83,16 @@ int main( int argc, char *argv[] )
 
 	char *physmem = page_table_get_physmem(pt);
 
-	if(!strcmp(program,"sort")) {
+	if(!strcmp(PROGRAM,"sort")) {
 		sort_program(virtmem, NPAGES*PAGE_SIZE);
 
-	} else if(!strcmp(program,"scan")) {
+	} else if(!strcmp(PROGRAM,"scan")) {
 		scan_program(virtmem, NPAGES*PAGE_SIZE);
 
-	} else if(!strcmp(program,"focus")) {
+	} else if(!strcmp(PROGRAM,"focus")) {
 		focus_program(virtmem, NPAGES*PAGE_SIZE);
 
 	} else {
-		//fprintf(stderr,"unknown program: %s\n",argv[3]);
 		fprintf(stderr,"unknown program: %s\n",argv[4]);
 		return 1;
 	}
