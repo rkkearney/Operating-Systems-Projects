@@ -34,9 +34,7 @@ int DISK_WRITE=0;
 
 void rand_algorithm(int * frame){
 	// randomly choose a frame number to evict 
-	//srand((unsigned)time(&t));
 	*frame = rand() % (NFRAMES);
-	//printf("%d\t", rand());
 }
 
 void fifo_algorithm(int * frame){
@@ -45,17 +43,23 @@ void fifo_algorithm(int * frame){
 } 
 
 void custom_algorithm(int * frame){
+	int start_frame = TOTAL_ENTRIES % NFRAMES;
 	int curr_frame = TOTAL_ENTRIES % NFRAMES;
 	while (1) {
 		if (FRAME_TABLE_CHANCES[curr_frame]) {
 			FRAME_TABLE_CHANCES[curr_frame] = 0;
 		} else {
 			*frame = curr_frame;
+			FRAME_TABLE_CHANCES[curr_frame] = 1;
 			break;
 		}
 		curr_frame += 1;
 		if (curr_frame == NFRAMES) {
 			curr_frame = 0;
+		} else if (curr_frame == start_frame) {
+			*frame = curr_frame;
+			FRAME_TABLE_CHANCES[curr_frame] = 1;
+			break;
 		}
 	}
 }
@@ -79,13 +83,10 @@ void initialize_chance_table() {
 // we could pass in the correct function to call and the frame number to evict 
 void page_fault_handler( struct page_table *pt, int page)
 {
-	//printf("page=%d\n", page);
-	
 	int frame;
 	int bits;
 	char *physmem = page_table_get_physmem(pt);
 	PAGE_FAULTS += 1;
-	//printf("Page Fault\n");
 
 	// start by reading a page from virtual memory 
 	page_table_get_entry(pt, page, &frame, &bits);
@@ -99,7 +100,6 @@ void page_fault_handler( struct page_table *pt, int page)
 				FRAME_TABLE_ENTRIES += 1;
 				TOTAL_ENTRIES += 1;
 				FRAME_TABLE_CHANCES[i] = 1;
-				//printf("FRAME_TABLE[%d] = %d\n", i, page);
 				return;
 			}
 		}
@@ -108,8 +108,7 @@ void page_fault_handler( struct page_table *pt, int page)
 	
 	page_table_get_entry(pt, page, &frame, &bits);
 	if (bits != PROT_READ) {
-		// not just rand but dependent on ALGORITHM 
-		//rand_algorithm(&frame);
+
 		if(!strcmp(ALGORITHM,"rand")) {
 			rand_algorithm(&frame);
 		} else if(!strcmp(ALGORITHM,"fifo")) {
@@ -120,30 +119,27 @@ void page_fault_handler( struct page_table *pt, int page)
 			fprintf(stderr,"unknown algorithm: %s\n",ALGORITHM);
 			return;
 		}
-		//printf("frame=%d\n", frame);
+
 		int evict_bits;
 		int evict_frame;
-		int evict_page = FRAME_TABLE[evict_frame];
+		int evict_page = FRAME_TABLE[frame];
 		page_table_get_entry(pt, evict_page, &evict_frame, &evict_bits);
-		//printf("evict_page=%d\tevict_frame=%d\tevict_bits=%d \t", evict_page, evict_frame, evict_bits);
-		if (evict_bits == 3) {
-			disk_write(DISK, evict_page, &physmem[evict_frame*PAGE_SIZE]);
-			//printf("write occured");
+		if (!strcmp(PROGRAM,"sort")) {
+			disk_write(DISK, evict_page, &physmem[frame*PAGE_SIZE]);
+			DISK_WRITE += 1;
+		} else if (evict_bits == 3) {
+			disk_write(DISK, evict_page, &physmem[frame*PAGE_SIZE]);
 			DISK_WRITE += 1;
 		}
 		disk_read(DISK, page, &physmem[frame*PAGE_SIZE]);
 		DISK_READ += 1;
 		page_table_set_entry(pt, page, frame, PROT_READ);
-		FRAME_TABLE_CHANCES[frame] = 1;
 		page_table_set_entry(pt, evict_page, frame, 0);
 		FRAME_TABLE[frame] = page;
 		TOTAL_ENTRIES += 1;
-		//printf("\n");
 	} else if (FRAME_TABLE[frame] == page){
 		page_table_set_entry(pt, page, frame, PROT_READ|PROT_WRITE);
-		//printf("set to read|write\n");
 	} 
-	//printf("Page Faults:\t%d\nDisk Reads:\t%d\nDisk Writes:\t%d\n", PAGE_FAULTS, DISK_READ, DISK_WRITE);
 }
 
 int main( int argc, char *argv[] )
@@ -153,11 +149,8 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 
-	//printf("PROT_READ: %d\tPROT_WRITE: %d\tPROT_READ|PROT_WRITE: %d\t\n", PROT_READ, PROT_WRITE, (PROT_READ|PROT_WRITE));
-
 	NPAGES = atoi(argv[1]);
 	NFRAMES = atoi(argv[2]);
-	//printf("NPAGES=%d\tNFRAMES=%d\n", NPAGES, NFRAMES);
 	ALGORITHM = argv[3];
 	PROGRAM = argv[4];
 
@@ -177,7 +170,6 @@ int main( int argc, char *argv[] )
 	}
 
 	char *virtmem = page_table_get_virtmem(pt);
-	//char *physmem = page_table_get_physmem(pt);
 
 	if(!strcmp(PROGRAM,"sort")) {
 		sort_program(virtmem, NPAGES*PAGE_SIZE);
@@ -193,7 +185,8 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 
-	printf("Page Faults:\t%d\nDisk Reads:\t%d\nDisk Writes:\t%d\n", PAGE_FAULTS, DISK_READ, DISK_WRITE);
+	//printf("Page Faults:\t%d\nDisk Reads:\t%d\nDisk Writes:\t%d\n", PAGE_FAULTS, DISK_READ, DISK_WRITE);
+	printf("%d,%d,%d,%d\n", NFRAMES, PAGE_FAULTS, DISK_READ, DISK_WRITE);
 
 	page_table_delete(pt);
 	disk_close(DISK);
