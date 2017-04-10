@@ -4,10 +4,10 @@ import os
 
 #with open('rand.csv', w) as file:
 #for program in ['scan', 'sort', 'focus']:
-program = 'focus'
+program = 'scan'
 n = 3
 while n <= 100:
-	command = './virtmem 100 ' + str(n) + ' rand ' + program
+	command = './virtmem 100 ' + str(n) + ' fifo ' + program
 	os.system(command)
 	n+=1
 
