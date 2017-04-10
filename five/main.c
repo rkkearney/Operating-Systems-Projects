@@ -37,11 +37,11 @@ void rand_algorithm(int * frame){
 	//printf("%d\t", rand());
 }
 
-void fifo_algorithm(){
+void fifo_algorithm(int * frame){
 	// queue implementation which stores the page to evict 
 }
 
-void custom_algorithm(){
+void custom_algorithm(int * frame){
 
 }
 
@@ -85,6 +85,16 @@ void page_fault_handler( struct page_table *pt, int page)
 	if (bits != PROT_READ) {
 		// not just rand but dependent on ALGORITHM 
 		rand_algorithm(&frame);
+		if(!strcmp(ALGORITHM,"rand")) {
+			rand_algorithm(&frame);
+		} else if(!strcmp(ALGORITHM,"fifo")) {
+			fifo_algorithm(&frame);
+		} else if(!strcmp(ALGORITHM,"custom")) {
+			custom_algorithm(&frame);
+		} else {
+			fprintf(stderr,"unknown algorithm: %s\n",ALGORITHM);
+			return;
+		}
 		//printf("frame=%d\n", frame);
 		int evict_bits;
 		int evict_frame;
