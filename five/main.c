@@ -22,7 +22,9 @@ int NFRAMES;
 const char *ALGORITHM;
 const char *PROGRAM;
 int *FRAME_TABLE;
+int *FRAME_TABLE_CHANCES;
 int FRAME_TABLE_ENTRIES = 0;
+int TOTAL_ENTRIES = 0;
 struct disk *DISK;
 int PAGE_FAULTS=0;
 int DISK_READ=0;
@@ -38,11 +40,24 @@ void rand_algorithm(int * frame){
 }
 
 void fifo_algorithm(int * frame){
-	// queue implementation which stores the page to evict 
-}
+	// queue implementation which stores the page to evict
+	*frame = TOTAL_ENTRIES % NFRAMES;
+} 
 
 void custom_algorithm(int * frame){
-
+	int curr_frame = TOTAL_ENTRIES % NFRAMES;
+	while (1) {
+		if (FRAME_TABLE_CHANCES[curr_frame]) {
+			FRAME_TABLE_CHANCES[curr_frame] = 0;
+		} else {
+			*frame = curr_frame;
+			break;
+		}
+		curr_frame += 1;
+		if (curr_frame == NFRAMES) {
+			curr_frame = 0;
+		}
+	}
 }
 
 void initialize_frame_table() {
@@ -50,6 +65,14 @@ void initialize_frame_table() {
 	int i;
 	for (i = 0; i < NFRAMES; i++) {
 		FRAME_TABLE[i] = -1;
+	}
+}
+
+void initialize_chance_table() {
+	FRAME_TABLE_CHANCES = malloc(NFRAMES*sizeof(int *));
+	int i;
+	for (i = 0; i < NPAGES; i++) {
+		FRAME_TABLE_CHANCES[i] = 0;
 	}
 }
 
@@ -74,6 +97,8 @@ void page_fault_handler( struct page_table *pt, int page)
 				page_table_set_entry(pt, page, i, PROT_READ);
 				FRAME_TABLE[i] = page;
 				FRAME_TABLE_ENTRIES += 1;
+				TOTAL_ENTRIES += 1;
+				FRAME_TABLE_CHANCES[i] = 1;
 				//printf("FRAME_TABLE[%d] = %d\n", i, page);
 				return;
 			}
@@ -84,7 +109,7 @@ void page_fault_handler( struct page_table *pt, int page)
 	page_table_get_entry(pt, page, &frame, &bits);
 	if (bits != PROT_READ) {
 		// not just rand but dependent on ALGORITHM 
-		rand_algorithm(&frame);
+		//rand_algorithm(&frame);
 		if(!strcmp(ALGORITHM,"rand")) {
 			rand_algorithm(&frame);
 		} else if(!strcmp(ALGORITHM,"fifo")) {
@@ -109,22 +134,16 @@ void page_fault_handler( struct page_table *pt, int page)
 		disk_read(DISK, page, &physmem[frame*PAGE_SIZE]);
 		DISK_READ += 1;
 		page_table_set_entry(pt, page, frame, PROT_READ);
+		FRAME_TABLE_CHANCES[frame] = 1;
 		page_table_set_entry(pt, evict_page, frame, 0);
 		FRAME_TABLE[frame] = page;
+		TOTAL_ENTRIES += 1;
 		//printf("\n");
 	} else if (FRAME_TABLE[frame] == page){
 		page_table_set_entry(pt, page, frame, PROT_READ|PROT_WRITE);
 		//printf("set to read|write\n");
 	} 
 	//printf("Page Faults:\t%d\nDisk Reads:\t%d\nDisk Writes:\t%d\n", PAGE_FAULTS, DISK_READ, DISK_WRITE);
-
-	// this read results in a page fault - look at existing permissions
-	// conclude fault occurs due to mising permisions 
-	// no permissions? add PROT_READ
-	// PROT READ? Add PROT_WRITE 
-	// page fault handler should choose a free frame
-	// adjust page table to map page to frame with correct permissions
-	// load correct page from disk into correct frame on physical memory 
 }
 
 int main( int argc, char *argv[] )
@@ -143,6 +162,7 @@ int main( int argc, char *argv[] )
 	PROGRAM = argv[4];
 
 	initialize_frame_table();
+	initialize_chance_table();
 
 	DISK = disk_open("myvirtualdisk", NPAGES);
 	if(!DISK) {
