@@ -43,27 +43,23 @@ void fifo_algorithm(int * frame){
 } 
 
 void custom_algorithm(int * frame){
-	int start_frame = TOTAL_ENTRIES % NFRAMES;
 	int curr_frame = TOTAL_ENTRIES % NFRAMES;
 	while (1) {
 		if (FRAME_TABLE_CHANCES[curr_frame]) {
 			FRAME_TABLE_CHANCES[curr_frame] = 0;
 		} else {
 			*frame = curr_frame;
-			FRAME_TABLE_CHANCES[curr_frame] = 1;
 			break;
 		}
 		curr_frame += 1;
 		if (curr_frame == NFRAMES) {
 			curr_frame = 0;
-		} else if (curr_frame == start_frame) {
-			*frame = curr_frame;
-			FRAME_TABLE_CHANCES[curr_frame] = 1;
-			break;
 		}
 	}
 }
 
+/* Initialize the Frame Table to be all -1,
+	to signify empty slots */
 void initialize_frame_table() {
 	FRAME_TABLE = malloc(NFRAMES*sizeof(int *));
 	int i;
@@ -72,6 +68,8 @@ void initialize_frame_table() {
 	}
 }
 
+/* Initialize the Frame Chance Table to be all 0,
+	to signify empty slots */
 void initialize_chance_table() {
 	FRAME_TABLE_CHANCES = malloc(NFRAMES*sizeof(int *));
 	int i;
@@ -90,16 +88,25 @@ void page_fault_handler( struct page_table *pt, int page)
 
 	// start by reading a page from virtual memory 
 	page_table_get_entry(pt, page, &frame, &bits);
-	
+
+
+	/* If the Frame Table has empty slots,
+		Fill in those slots linearly first */
 	if (FRAME_TABLE_ENTRIES < NFRAMES && FRAME_TABLE[frame] != page) {
 		int i;
 		for (i = 0; i < NFRAMES; i++) {
+			// check if Frame is empty
 			if (FRAME_TABLE[i] == -1) {
+				// set the entry
 				page_table_set_entry(pt, page, i, PROT_READ);
+				// fill the Frame table slot
 				FRAME_TABLE[i] = page;
+				// increment number of entries in table
 				FRAME_TABLE_ENTRIES += 1;
+				// increment the total number of entries added
 				TOTAL_ENTRIES += 1;
-				FRAME_TABLE_CHANCES[i] = 1;
+				// set the number of chances to 0
+				FRAME_TABLE_CHANCES[i] = 0;
 				return;
 			}
 		}
@@ -107,8 +114,10 @@ void page_fault_handler( struct page_table *pt, int page)
 	
 	
 	page_table_get_entry(pt, page, &frame, &bits);
+	
 	if (bits != PROT_READ) {
 
+		// get frame from algorithm passed
 		if(!strcmp(ALGORITHM,"rand")) {
 			rand_algorithm(&frame);
 		} else if(!strcmp(ALGORITHM,"fifo")) {
@@ -120,25 +129,47 @@ void page_fault_handler( struct page_table *pt, int page)
 			return;
 		}
 
+
 		int evict_bits;
 		int evict_frame;
+		// get the page number to be evicted
 		int evict_page = FRAME_TABLE[frame];
+		
+		// get the bits for the frame to see if it is dirty
 		page_table_get_entry(pt, evict_page, &evict_frame, &evict_bits);
+		
+		// if it is sort, always write to disk
 		if (!strcmp(PROGRAM,"sort")) {
 			disk_write(DISK, evict_page, &physmem[frame*PAGE_SIZE]);
 			DISK_WRITE += 1;
+
+		// else if it is dirty, write to disk
 		} else if (evict_bits == 3) {
 			disk_write(DISK, evict_page, &physmem[frame*PAGE_SIZE]);
 			DISK_WRITE += 1;
 		}
+		
+		// read from the disk and increment the Disk Read parameter
 		disk_read(DISK, page, &physmem[frame*PAGE_SIZE]);
 		DISK_READ += 1;
+		
+		// set the new entry
 		page_table_set_entry(pt, page, frame, PROT_READ);
+		// rewrite the old entry
 		page_table_set_entry(pt, evict_page, frame, 0);
+		
+		// new entry gets a chance of 0
+		FRAME_TABLE_CHANCES[frame] = 0;
+		// update page pointing to the frame
 		FRAME_TABLE[frame] = page;
+		// increase total entries
 		TOTAL_ENTRIES += 1;
-	} else if (FRAME_TABLE[frame] == page){
+	
+	/* Update the Read bit to a a Write Bit and continue */
+	} else if (FRAME_TABLE[frame] == page) {
 		page_table_set_entry(pt, page, frame, PROT_READ|PROT_WRITE);
+		// because it is accessed, add a second chance bit
+		FRAME_TABLE_CHANCES[frame] = 1;
 	} 
 }
 
@@ -185,8 +216,8 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 
-	//printf("Page Faults:\t%d\nDisk Reads:\t%d\nDisk Writes:\t%d\n", PAGE_FAULTS, DISK_READ, DISK_WRITE);
-	printf("%d,%d,%d,%d\n", NFRAMES, PAGE_FAULTS, DISK_READ, DISK_WRITE);
+	printf("Page Faults:\t%d\nDisk Reads:\t%d\nDisk Writes:\t%d\n", PAGE_FAULTS, DISK_READ, DISK_WRITE);
+	//printf("%d,%d,%d,%d\n", NFRAMES, PAGE_FAULTS, DISK_READ, DISK_WRITE);
 
 	page_table_delete(pt);
 	disk_close(DISK);
