@@ -33,6 +33,20 @@ union fs_block {
 	char data[DISK_BLOCK_SIZE];
 };
 
+void inode_load( int number, struct fs_inode *inode ) {
+	// given inode number
+	// calculate offset into inode region (# * sizeof(inode))
+	// add to start address of inode table on the disk 
+
+	// FROM TEXTBOOK
+	/*blk = (inumber * sizeof(inode_t)) / blockSize;
+	sector = ((blk * blockSize) + inodeStartAddr) / sectorSize;*/
+}
+
+void inode_save ( int number, struct fs_inode *inode) {
+
+}
+
 int fs_format()
 {
 	// creates a new filesystem on the disk, destroys present data 
@@ -51,17 +65,26 @@ void fs_debug()
 	disk_read(0,block.data);
 
 	printf("superblock:\n");
-	printf("    %d blocks\n",block.super.nblocks);
+	printf("    %d blocks on disk\n",block.super.nblocks);
 	printf("    %d inode blocks\n",block.super.ninodeblocks);
-	printf("    %d inodes\n",block.super.ninodes);
+	printf("    %d inodes total\n",block.super.ninodes);
 	
-	printf("inode %d:\n", block.inode[block.super.ninodeblocks].size);
 }
 
 int fs_mount()
 {
 	// examine disk for a filesystem 
-	// if diks present, read superblock, build free block bitmap, prepare fs for use
+	
+	// if disk present, read superblock, build free block bitmap, prepare fs for use
+	
+	// check if disk present and read superblock 
+	disk_read(0, block.data);
+	// do somethiing to get superblock data
+	// build free block bitmap
+	// scan through all inodes and record which blocks are in use 
+
+
+
 	// return one on success, zero otherwise
 	return 0;
 }
