@@ -12,7 +12,6 @@
 #define POINTERS_PER_INODE 5			// number of pointers in each inode structure
 #define POINTERS_PER_BLOCK 1024			// number of pointers found in an indirect block
 
-
 struct fs_superblock {
 	int magic;
 	int nblocks;		// number of blocks on disk
@@ -50,13 +49,14 @@ void inode_save ( int number, struct fs_inode *inode) {
 
 int fs_format()
 {
-	/*struct super_block super;
-	super.nblocks = disk_size();
-	super.ninodeblocks = int(.10 * disk_size());*/
+	union fs_block block;
+	block.super.magic = 
+	block.super.nblocks = disk_size();
+	block.super.ninodeblocks = .10 * block.super.nblocks;
 
 	// clears inode tables
 	// writes the superblock
-	// returns 1 success, zero otherwise 
+	// returns 1 success, zero otherwise
 	return 0;
 }
 
@@ -79,10 +79,22 @@ int fs_mount()
 	// examine disk for a filesystem 
 	
 	// if disk present, read superblock, build free block bitmap, prepare fs for use
-	
-	// check if disk present and read superblock 
-	//disk_read(0, block.data);
+
+	// check if disk present
+	// read superblock
+	union fs_block block;
+	disk_read(0,block.data);
 	// do somethiing to get superblock data
+	/*printf("BLOCK.data = ");
+	int i = 0;
+	for (i = 0; i < DISK_BLOCK_SIZE; i++) {
+		printf("%d", block.data[i] - '0');
+	}
+	printf("\n");*/
+	/*BLOCK.super.magic = 
+	BLOCK.super.nblocks = 
+	BLOCK.super.ninodeblocks = 
+	BLOCK.super.ninodes = */
 	// build free block bitmap
 	// scan through all inodes and record which blocks are in use 
 
