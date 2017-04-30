@@ -307,8 +307,44 @@ int fs_getsize( int inumber )
 int fs_read( int inumber, char *data, int length, int offset )
 {
 	if (MOUNT && INODE_TABLE[inumber-1]) {
-		int bytes_read;
+		int bytes_read = 0;
+		int blocknum = inumber/INODES_PER_BLOCK + 1;
+		int inode_index = (inumber-1)%INODES_PER_BLOCK;
 
+		union fs_block iblock;
+
+		if (fs_getsize(inumber)) {
+			disk_read(blocknum, iblock.data);
+			
+			int size = block.inode[inode_index].size;
+			int num_data_blocks = get_num_data_blocks(size);
+			int num_direct_blocks, num_indirect_blocks;
+
+			if (num_data_blocks > 5) {
+				num_direct_blocks = 5;
+				num_indirect_blocks = num_data_blocks - 5;
+			} else {
+				num_direct_blocks = num_data_blocks;
+				num_indirect_blocks = 0;
+			}
+
+			union fs_block dblock;
+			int db;
+			for (db = 0; db < num_direct_blocks; db++) {
+				disk_read(block.inode[inumber-1].direct[db], dblock.data);
+			}
+			
+			if (num_indirect_blocks) {
+				union fs_block idblock;
+				disk_read(block.inode[inumber-1].indirect, idblock.data);
+
+				int idb;
+				for (idb = 0; idb < num_indirect_blocks; idb++) {
+					disk_read(idblock.pointers[idb], dblock.data);
+				}
+			}
+
+		}
 		return bytes_read;
 	}
 	// copy "length" bytes from the inode into "data" pointer, starting at "offset"
