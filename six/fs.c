@@ -292,14 +292,25 @@ int fs_delete( int inumber )
 
 int fs_getsize( int inumber )
 {
-	// return the logical size of the given inode, in bytes
-	// on failure, return -1
+	if (MOUNT && INODE_TABLE[inumber-1]) {
+		int blocknum = inumber/INODES_PER_BLOCK + 1;
+		int inode_index = (inumber-1)%INODES_PER_BLOCK;
+
+		union fs_block block;
+		disk_read(blocknum, block.data);
+
+		return block.inode[inode_index].size;
+	}
 	return -1;
 }
 
 int fs_read( int inumber, char *data, int length, int offset )
 {
-	// read data from valid inode
+	if (MOUNT && INODE_TABLE[inumber-1]) {
+		int bytes_read;
+
+		return bytes_read;
+	}
 	// copy "length" bytes from the inode into "data" pointer, starting at "offset"
 	// return the total number of bytes read
 	// total number could be less than requested number

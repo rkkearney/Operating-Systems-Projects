@@ -143,6 +143,7 @@ int main( int argc, char *argv[] )
 			printf("    debug\n");
 			printf("    create\n");
 			printf("    delete  <inode>\n");
+			printf("    getsize <inode>\n");
 			printf("    cat     <inode>\n");
 			printf("    copyin  <file> <inode>\n");
 			printf("    copyout <inode> <file>\n");
