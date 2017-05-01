@@ -64,13 +64,13 @@ int fs_format()
 		disk_write(0, sblock.data);
 
 		int i, ib;
-		union fs_block iblock;
+		union fs_block inode_block;
 		for (i = 0; i < INODES_PER_BLOCK; i++) {
-			iblock.inode[i].isvalid = 0;
+			inode_block.inode[i].isvalid = 0;
 		}
 
 		for (ib = 0; ib < sblock.super.ninodeblocks; ib++) {
-			disk_write(ib+1, iblock.data);
+			disk_write(ib+1, inode_block.data);
 		}
 
 		return 1;
@@ -82,7 +82,7 @@ void fs_debug()
 	// scan a mounted file system 
 	// report how inodes and blocks are organized 
 	union fs_block block;
-	//union fs_block iblock;
+	//union fs_block inode_block;
 	disk_read(0,block.data);
 
 	printf("superblock:\n");
@@ -153,6 +153,16 @@ void initialize_free_block_bitmap(int nblocks) {
 	}
 }
 
+int find_free_block() {
+	int blocknum = 0;
+	while (1) {
+		if (FREE_BLOCK_BITMAP[blocknum]) break;
+		else blocknum++;
+	}
+	FREE_BLOCK_BITMAP[blocknum] = 0;
+	return blocknum;
+}
+
 void initialize_inode_table(int ninodes) {
 	INODE_TABLE = malloc(sizeof(int *)*ninodes);
 	int i;
@@ -176,11 +186,11 @@ int fs_mount()
 		int i, ib;		
 		for (ib = 0; ib < block.super.ninodeblocks; ib++) {
 			
-			union fs_block iblock;
-			disk_read(ib+1, iblock.data);
+			union fs_block inode_block;
+			disk_read(ib+1, inode_block.data);
 			
 			for (i = 0; i < INODES_PER_BLOCK; i++) {
-				if (iblock.inode[i].isvalid) {
+				if (inode_block.inode[i].isvalid) {
 					INODE_TABLE[i] = 1;
 
 					int num_data_blocks = get_num_data_blocks(block.inode[i].size);
@@ -231,13 +241,13 @@ int fs_create()
 		int i;
 		for (i = 0; i < block.super.ninodes; i++) {
 			if (!INODE_TABLE[i]) {
-				union fs_block iblock;
+				union fs_block inode_block;
 				int blocknum = (i/INODES_PER_BLOCK )+ 1;
-				disk_read(blocknum, iblock.data);
-				iblock.inode[i%INODES_PER_BLOCK].isvalid = 1;
-				iblock.inode[i%INODES_PER_BLOCK].size = 0;
+				disk_read(blocknum, inode_block.data);
+				inode_block.inode[i%INODES_PER_BLOCK].isvalid = 1;
+				inode_block.inode[i%INODES_PER_BLOCK].size = 0;
 				INODE_TABLE[i] = 1;
-				disk_write(blocknum, iblock.data);
+				disk_write(blocknum, inode_block.data);
 				return i+1;
 			}
 		}
@@ -311,12 +321,16 @@ int fs_read( int inumber, char *data, int length, int offset )
 		int blocknum = inumber/INODES_PER_BLOCK + 1;
 		int inode_index = (inumber-1)%INODES_PER_BLOCK;
 
-		union fs_block iblock;
+		union fs_block inode_block;
 
 		if (fs_getsize(inumber)) {
-			disk_read(blocknum, iblock.data);
+			disk_read(blocknum, inode_block.data);
 			
-			int size = block.inode[inode_index].size;
+			int size = inode_block.inode[inode_index].size;
+			
+			int stop_read = size - offset;
+			if (stop_read <= 0) return 0;
+
 			int num_data_blocks = get_num_data_blocks(size);
 			int num_direct_blocks, num_indirect_blocks;
 
@@ -328,36 +342,98 @@ int fs_read( int inumber, char *data, int length, int offset )
 				num_indirect_blocks = 0;
 			}
 
-			union fs_block dblock;
-			int db;
-			for (db = 0; db < num_direct_blocks; db++) {
-				disk_read(block.inode[inumber-1].direct[db], dblock.data);
-			}
+			union fs_block data_block;
+			int direct_block_index = offset/4096;
 			
-			if (num_indirect_blocks) {
-				union fs_block idblock;
-				disk_read(block.inode[inumber-1].indirect, idblock.data);
-
-				int idb;
-				for (idb = 0; idb < num_indirect_blocks; idb++) {
-					disk_read(idblock.pointers[idb], dblock.data);
+			int i;
+			if (direct_block_index >= num_direct_blocks && num_indirect_blocks) {
+				int indirect_block_index = direct_block_index - num_direct_blocks;
+				union fs_block indirect_data_block;
+				
+				disk_read(inode_block.inode[inumber-1].indirect, indirect_data_block.data);
+				disk_read(indirect_data_block.pointers[indirect_block_index], data_block.data);
+				
+				for (i = 0; i < DISK_BLOCK_SIZE; i++) {
+					data[i] = data_block.data[i];
+					bytes_read++;
+					if (bytes_read == stop_read) break;
+				}
+			} else {
+				disk_read(inode_block.inode[inumber-1].direct[direct_block_index], data_block.data);
+				
+				for (i = 0; i < DISK_BLOCK_SIZE; i++) {
+					data[i] = data_block.data[i];
+					bytes_read++;
+					if (bytes_read == stop_read) break;
 				}
 			}
-
 		}
 		return bytes_read;
 	}
-	// copy "length" bytes from the inode into "data" pointer, starting at "offset"
-	// return the total number of bytes read
-	// total number could be less than requested number
 	return 0;
 }
 
 int fs_write( int inumber, const char *data, int length, int offset )
 {
-	// write data to valid inode
 	// copy "length" bytes from the pointer "data" into the inode, starting at "offset"
 	// allocate necessary direct and indirect blocks int he process
 	// return the number of bytes actually written
+	if (MOUNT && INODE_TABLE[inumber-1]) {
+		int bytes_written = 0;
+		int blocknum = inumber/INODES_PER_BLOCK + 1;
+		int inode_index = (inumber-1)%INODES_PER_BLOCK;
+		
+		union fs_block inode_block;
+		disk_read(blocknum, inode_block.data);
+
+		int stop_write = length - offset;
+		if (stop_write <= 0) return 0;
+
+		union fs_block data_block;
+
+		int direct_block_index = offset/4096;
+		if (direct_block_index < POINTERS_PER_INODE) {
+			int direct_blocknum = find_free_block();
+			inode_block.inode[inode_index].direct[direct_block_index] = direct_blocknum;
+
+			int i;
+			for (i = 0; i < DISK_BLOCK_SIZE; i++) {
+				data_block.data[i] = data[offset+i];
+				bytes_written++;
+				if (bytes_written == stop_write) break;
+			}
+			disk_write(direct_blocknum, data_block.data);
+		} else {
+			int indirect_block_index = direct_block_index - POINTERS_PER_INODE;
+			if (indirect_block_index == 0) {
+				int indirect_blocknum = find_free_block();
+				inode_block.inode[inode_index].indirect = indirect_blocknum;
+	
+				union fs_block indirect_block;
+				int indirect_data_blocknum = find_free_block();
+				indirect_block.pointers[indirect_block_index] = indirect_data_blocknum;
+				disk_write(indirect_blocknum, indirect_block.data);
+				
+				int i;
+				for (i = 0; i < DISK_BLOCK_SIZE; i++) {
+					data_block.data[i] = data[offset+i];
+					bytes_written++;
+					if (bytes_written == stop_write) break;
+				}
+				disk_write(indirect_data_blocknum, data_block.data);
+			}
+		}
+
+		/*int i;
+		for (i = 0; i < DISK_BLOCK_SIZE; i++) {
+			data_block.data[i] = data[offset+i];
+			bytes_written++;
+			if (bytes_written == stop_write) break;
+		}*/
+
+		inode_block.inode[inode_index].size += bytes_written;
+		disk_write(blocknum, inode_block.data);
+		return bytes_written;
+	}
 	return 0;
 }
