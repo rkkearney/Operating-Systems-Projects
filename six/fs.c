@@ -64,13 +64,13 @@ int fs_format()
 		disk_write(0, sblock.data);
 
 		int i, ib;
-		union fs_block inode_block;
+		union fs_block iblock;
 		for (i = 0; i < INODES_PER_BLOCK; i++) {
-			inode_block.inode[i].isvalid = 0;
+			iblock.inode[i].isvalid = 0;
 		}
 
 		for (ib = 0; ib < sblock.super.ninodeblocks; ib++) {
-			disk_write(ib+1, inode_block.data);
+			disk_write(ib+1, iblock.data);
 		}
 
 		return 1;
@@ -82,7 +82,7 @@ void fs_debug()
 	// scan a mounted file system 
 	// report how inodes and blocks are organized 
 	union fs_block block;
-	//union fs_block inode_block;
+	//union fs_block iblock;
 	disk_read(0,block.data);
 
 	printf("superblock:\n");
@@ -160,6 +160,7 @@ int find_free_block() {
 		else blocknum++;
 	}
 	FREE_BLOCK_BITMAP[blocknum] = 0;
+
 	return blocknum;
 }
 
@@ -186,11 +187,11 @@ int fs_mount()
 		int i, ib;		
 		for (ib = 0; ib < block.super.ninodeblocks; ib++) {
 			
-			union fs_block inode_block;
-			disk_read(ib+1, inode_block.data);
+			union fs_block iblock;
+			disk_read(ib+1, iblock.data);
 			
 			for (i = 0; i < INODES_PER_BLOCK; i++) {
-				if (inode_block.inode[i].isvalid) {
+				if (iblock.inode[i].isvalid) {
 					INODE_TABLE[i] = 1;
 
 					int num_data_blocks = get_num_data_blocks(block.inode[i].size);
@@ -241,13 +242,13 @@ int fs_create()
 		int i;
 		for (i = 0; i < block.super.ninodes; i++) {
 			if (!INODE_TABLE[i]) {
-				union fs_block inode_block;
+				union fs_block iblock;
 				int blocknum = (i/INODES_PER_BLOCK )+ 1;
-				disk_read(blocknum, inode_block.data);
-				inode_block.inode[i%INODES_PER_BLOCK].isvalid = 1;
-				inode_block.inode[i%INODES_PER_BLOCK].size = 0;
+				disk_read(blocknum, iblock.data);
+				iblock.inode[i%INODES_PER_BLOCK].isvalid = 1;
+				iblock.inode[i%INODES_PER_BLOCK].size = 0;
 				INODE_TABLE[i] = 1;
-				disk_write(blocknum, inode_block.data);
+				disk_write(blocknum, iblock.data);
 				return i+1;
 			}
 		}
@@ -423,13 +424,6 @@ int fs_write( int inumber, const char *data, int length, int offset )
 				disk_write(indirect_data_blocknum, data_block.data);
 			}
 		}
-
-		/*int i;
-		for (i = 0; i < DISK_BLOCK_SIZE; i++) {
-			data_block.data[i] = data[offset+i];
-			bytes_written++;
-			if (bytes_written == stop_write) break;
-		}*/
 
 		inode_block.inode[inode_index].size += bytes_written;
 		disk_write(blocknum, inode_block.data);
