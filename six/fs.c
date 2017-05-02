@@ -102,7 +102,7 @@ void fs_debug()
 		
 		for (i = 0; i < INODES_PER_BLOCK; i++) {
 			if (block.inode[i].isvalid) {
-				printf("inode %d:\n", i+1);
+				printf("inode %d:\n", i);
 				printf("    size: %d bytes\n",block.inode[i].size);
 				
 				num_data_blocks = get_num_data_blocks(block.inode[i].size);
