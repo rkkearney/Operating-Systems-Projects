@@ -37,18 +37,38 @@ union fs_block {
 	char data[DISK_BLOCK_SIZE];
 };
 
-void inode_load( int number, struct fs_inode *inode ) {
-	// given inode number
-	// calculate offset into inode region (# * sizeof(inode))
-	// add to start address of inode table on the disk 
-
-	// FROM TEXTBOOK
-	/*blk = (inumber * sizeof(inode_t)) / blockSize;
-	sector = ((blk * blockSize) + inodeStartAddr) / sectorSize;*/
+int get_num_data_blocks(int size) {
+	int num_data_blocks = size/4096;
+	if (size%4096) num_data_blocks++;
+	return num_data_blocks;
 }
 
-void inode_save ( int number, struct fs_inode *inode) {
+void initialize_free_block_bitmap(int nblocks) {
+	FREE_BLOCK_BITMAP = malloc(sizeof(int *)*nblocks);
+	int i;
+	for (i = 0; i < nblocks; i++) {
+		FREE_BLOCK_BITMAP[i] = 1;
+	}
+}
 
+int find_free_block() {
+	int blocknum = 0;
+	while (1) {
+		if (FREE_BLOCK_BITMAP[blocknum]) break;
+		else blocknum++;
+	}
+	FREE_BLOCK_BITMAP[blocknum] = 0;
+
+	return blocknum;
+}
+
+void initialize_inode_table(int ninodes) {
+	INODE_TABLE = malloc(sizeof(int *)*ninodes);
+	int i;
+	//INODE_TABLE[0] = 1;
+	for (i = 0; i < ninodes; i++) {
+		INODE_TABLE[i] = 0;
+	}
 }
 
 int fs_format()
@@ -79,8 +99,6 @@ int fs_format()
 
 void fs_debug()
 {
-	// scan a mounted file system 
-	// report how inodes and blocks are organized 
 	union fs_block block;
 	//union fs_block iblock;
 	disk_read(0,block.data);
@@ -139,43 +157,8 @@ void fs_debug()
 	}
 }
 
-int get_num_data_blocks(int size) {
-	int num_data_blocks = size/4096;
-	if (size%4096) num_data_blocks++;
-	return num_data_blocks;
-}
-
-void initialize_free_block_bitmap(int nblocks) {
-	FREE_BLOCK_BITMAP = malloc(sizeof(int *)*nblocks);
-	int i;
-	for (i = 0; i < nblocks; i++) {
-		FREE_BLOCK_BITMAP[i] = 1;
-	}
-}
-
-int find_free_block() {
-	int blocknum = 0;
-	while (1) {
-		if (FREE_BLOCK_BITMAP[blocknum]) break;
-		else blocknum++;
-	}
-	FREE_BLOCK_BITMAP[blocknum] = 0;
-
-	return blocknum;
-}
-
-void initialize_inode_table(int ninodes) {
-	INODE_TABLE = malloc(sizeof(int *)*ninodes);
-	int i;
-	//INODE_TABLE[0] = 1;
-	for (i = 0; i < ninodes; i++) {
-		INODE_TABLE[i] = 0;
-	}
-}
-
 int fs_mount()
 {
-	// examine disk for a filesystem
 	union fs_block block;
 	disk_read(0, block.data);
 
@@ -227,10 +210,6 @@ int fs_mount()
 	} else {
 		return 0;
 	}
-	
-	// if disk present, read superblock, build free block bitmap, prepare fs for use
-	// build free block bitmap
-	// scan through all inodes and record which blocks are in use 
 }
 
 int fs_create()
