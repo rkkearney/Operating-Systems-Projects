@@ -176,7 +176,7 @@ int fs_mount()
 	union fs_block block;
 	disk_read(0, block.data);
 
-	if (block.super.magic) {
+	if (block.super.magic && !MOUNT) {
 		
 		initialize_free_block_bitmap(block.super.nblocks, block.super.ninodeblocks);
 		initialize_inode_table(block.super.ninodes);
