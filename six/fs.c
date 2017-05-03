@@ -62,16 +62,16 @@ void initialize_free_block_bitmap(int nblocks, int ninodeblocks) {
 
 // used in fs_write to locate available block to write to
 int find_free_block(int nblocks) {
-	int blocknum = 0;
+	int blocknum = 1;
 	// return first available block
-	while (1) {
-		if (FREE_BLOCK_BITMAP[blocknum] == 1) break;
-		else blocknum++;
+	while (blocknum < nblocks) {
+		if (FREE_BLOCK_BITMAP[blocknum] == 1) {
+			return blocknum;
+		} else {
+			blocknum++;
+		}
 	}
 	// check if all blocks are full
-	if (blocknum < nblocks) {
-		return blocknum;
-	}
 	return -1;
 }
 
@@ -322,6 +322,8 @@ int fs_delete( int inumber )
 			FREE_BLOCK_BITMAP[block.inode[inode_index].direct[db]] = 1;
 		}
 	
+		FREE_BLOCK_BITMAP[block.inode[inode_index].indirect] = 1;
+
 		if (num_indirect_blocks) {
 			union fs_block indirect_block;
 			disk_read(block.inode[inode_index].indirect, indirect_block.data);
@@ -445,20 +447,54 @@ int fs_write( int inumber, const char *data, int length, int offset )
 			
 		union fs_block inode_block;
 		disk_read(blocknum, inode_block.data);
+
+		if (inode_block.inode[inode_index].size != offset) {
+			int size = inode_block.inode[inode_index].size;
+			int num_data_blocks = get_num_data_blocks(size);
+			int num_direct_blocks, num_indirect_blocks;
+
+			// if more than 5 blocks; indirect blocks exist
+			if (num_data_blocks > 5) {
+				num_direct_blocks = 5;
+				num_indirect_blocks = num_data_blocks - 5;
+			} else {
+				num_direct_blocks = num_data_blocks;
+				num_indirect_blocks = 0;
+			}
+
+			// free direct and indirect blocks by setting bitmap to 1 for free block 
+			int db, idb;
+			for (db = 0; db < num_direct_blocks; db++) {
+				FREE_BLOCK_BITMAP[inode_block.inode[inode_index].direct[db]] = 1;
+			}
+
+			FREE_BLOCK_BITMAP[inode_block.inode[inode_index].indirect] = 1;
+		
+			if (num_indirect_blocks) {
+				union fs_block indirect_block;
+				disk_read(inode_block.inode[inode_index].indirect, indirect_block.data);
+				for (idb = 0; idb < num_indirect_blocks; idb++) {
+					FREE_BLOCK_BITMAP[indirect_block.pointers[idb]] = 1;
+				}
+			}
+			inode_block.inode[inode_index].size = 0;
+		}
 		
 		while (1) {
 			int bytes_written = 0;
 			int stop_write = original_length - offset;
-			if (stop_write <= 0) return total_bytes_written;
+			printf("stop_write = %d\n", stop_write);
+			if (stop_write <= 0) break;
 
 			union fs_block data_block;
 			int direct_block_index = offset/4096;
 
-			// if there are no indirect blocks read data from direct blocks 
+			// read data from direct blocks 
 			if (direct_block_index < POINTERS_PER_INODE) {
 				// find available blocks to write to 
+				printf("super_block.super.nblocks = %d\n", super_block.super.nblocks);
 				int direct_blocknum = find_free_block(super_block.super.nblocks);
-				
+				printf("direct_blocknum = %d\n", direct_blocknum);
 				if (direct_blocknum < 0) {
 					printf("ERROR: not enough blocks on disk - not all bytes written\n");
 					return total_bytes_written;
@@ -470,7 +506,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 
 				int i;
 				for (i = 0; i < DISK_BLOCK_SIZE; i++) {
-					data_block.data[i] = data[offset+i];
+					data_block.data[i] = data[offset_index+i];
 					bytes_written++;
 					if (bytes_written == stop_write) break;
 				}
@@ -485,6 +521,7 @@ int fs_write( int inumber, const char *data, int length, int offset )
 				if (indirect_block_index == 0) {
 					// find data block for pointers		
 					indirect_blocknum = find_free_block(super_block.super.nblocks);
+					printf("indirect_blocknum = %d\n", indirect_blocknum);
 
 					if (indirect_blocknum < 0) {
 						printf("ERROR: not enough blocks on disk - not all bytes written\n");
@@ -496,10 +533,13 @@ int fs_write( int inumber, const char *data, int length, int offset )
 					inode_block.inode[inode_index].indirect = indirect_blocknum;
 				} else {
 					indirect_blocknum = inode_block.inode[inode_index].indirect;
+					printf("indirect_blocknum = %d\n", indirect_blocknum);
 					disk_read(indirect_blocknum, indirect_block.data);
 				}
 
 				int indirect_data_blocknum = find_free_block(super_block.super.nblocks);
+				printf("indirect_data_blocknum = %d\n", indirect_data_blocknum);
+
 
 				if (indirect_data_blocknum < 0){
 					printf("ERROR: not enough blocks on disk - not all bytes written\n");
